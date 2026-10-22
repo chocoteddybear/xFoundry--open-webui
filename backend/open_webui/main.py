@@ -87,6 +87,7 @@ from open_webui.env import (
     ENABLE_CUSTOM_MODEL_FALLBACK,
     ENABLE_EASTER_EGGS,
     ENABLE_FUNCTIONS,
+    ENABLE_LIVE_SESSION_MOCK,
     # OAuth Back-Channel Logout
     ENABLE_OAUTH_BACKCHANNEL_LOGOUT,
     ENABLE_OTEL,
@@ -166,6 +167,7 @@ from open_webui.routers import (
     groups,
     images,
     knowledge,
+    live_session,
     memories,
     mfa,
     models,
@@ -879,6 +881,8 @@ app.include_router(openai.router, prefix='/openai', tags=['openai'])
 
 app.include_router(pipelines.router, prefix='/api/v1/pipelines', tags=['pipelines'])
 app.include_router(tasks.router, prefix='/api/v1/tasks', tags=['tasks'])
+if ENABLE_LIVE_SESSION_MOCK:
+    app.include_router(live_session.router, prefix='/api/v1/live-session', tags=['live-session'])
 app.include_router(images.router, prefix='/api/v1/images', tags=['images'])
 
 app.include_router(audio.router, prefix='/api/v1/audio', tags=['audio'])

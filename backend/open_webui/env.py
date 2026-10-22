@@ -472,6 +472,12 @@ UVICORN_WS_PER_MESSAGE_DEFLATE = os.getenv('UVICORN_WS_PER_MESSAGE_DEFLATE', 'Tr
 
 ENABLE_WEBSOCKET_SUPPORT = os.getenv('ENABLE_WEBSOCKET_SUPPORT', 'True').lower() == 'true'
 
+####################################
+# LIVE SESSION WIDGET (dev mock)
+####################################
+
+ENABLE_LIVE_SESSION_MOCK = os.getenv('ENABLE_LIVE_SESSION_MOCK', 'False').lower() == 'true'
+
 
 WEBSOCKET_MANAGER = os.getenv('WEBSOCKET_MANAGER', '')
 
