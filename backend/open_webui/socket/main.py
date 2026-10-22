@@ -17,6 +17,7 @@ from open_webui.config import (
     CORS_ALLOW_ORIGIN,
 )
 from open_webui.env import (
+    ENABLE_LIVE_SESSION_MOCK,
     ENABLE_WEBSOCKET_SUPPORT,
     GLOBAL_LOG_LEVEL,
     REDIS_KEY_PREFIX,
@@ -247,6 +248,7 @@ async def publish_chat_presence(chat_id: str):
         async with lock, asyncio.timeout(WEBSOCKET_REDIS_LOCK_TIMEOUT / 2):
             now = time.time()
             people = {}
+            sessions = 0
             for batch in get_session_pool_batches():
                 for _, session in batch:
                     if (
@@ -255,6 +257,7 @@ async def publish_chat_presence(chat_id: str):
                         and now - session.get('last_seen_at', 0) <= SESSION_POOL_TIMEOUT
                     ):
                         people[session['id']] = {'id': session['id'], 'name': session.get('name', '')}
+                        sessions += 1
             if REDIS is not None and not await lock.owned():
                 return
             await sio.emit(
@@ -269,8 +272,30 @@ async def publish_chat_presence(chat_id: str):
                 },
                 room=f'chat:{chat_id}',
             )
+            if ENABLE_LIVE_SESSION_MOCK:
+                await sio.emit(
+                    'events',
+                    {
+                        'chat_id': chat_id,
+                        'shared': True,
+                        'data': {'type': 'live:presence', 'data': {'chatId': chat_id, 'activeViewers': sessions}},
+                    },
+                    room=f'chat:{chat_id}',
+                )
     except Exception:
         log.exception('Failed to publish presence for chat %s', chat_id)
+
+
+async def publish_live_session_status(chat_id: str, status: str):
+    await sio.emit(
+        'events',
+        {
+            'chat_id': chat_id,
+            'shared': True,
+            'data': {'type': 'live:session_status', 'data': {'chatId': chat_id, 'status': status}},
+        },
+        room=f'chat:{chat_id}',
+    )
 
 
 async def periodic_session_pool_cleanup():
@@ -1478,6 +1503,9 @@ async def get_event_emitter(request_info, update_db=True):
                     room=f'chat:{chat_id}',
                     skip_sid=request_info.get('session_id'),
                 )
+            if ENABLE_LIVE_SESSION_MOCK and event_type == 'chat:active':
+                active = (event_data.get('data') or {}).get('active')
+                await publish_live_session_status(chat_id, 'streaming' if active else 'idle')
 
         if save_to_chat:
             event_type = event_data.get('type')
