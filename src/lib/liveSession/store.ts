@@ -51,6 +51,12 @@ export const updateLiveSession = (
 	if (next !== current) liveSessions.update((sessions) => ({ ...sessions, [key]: next }));
 };
 
+export const removeLiveSessions = (chatId: string) => {
+	const sessions = get(liveSessions);
+	const keep = Object.entries(sessions).filter(([, state]) => state.chatId !== chatId);
+	if (keep.length !== Object.keys(sessions).length) liveSessions.set(Object.fromEntries(keep));
+};
+
 export const getLiveSession = (key: string): LiveSessionState | undefined => get(liveSessions)[key];
 
 export const liveSessionFor = (chatId: string, messageId: string): Readable<LiveSessionState | null> =>
