@@ -69,7 +69,9 @@ describe('createSSEParser', () => {
 
 	it('ignores comments, ids, retry and unknown fields, and accepts a missing space after the colon', () => {
 		const { messages, parser } = collect();
-		parser.push(': keep-alive\nid: 4\nretry: 100\nfoo: bar\nevent:widget_done\ndata:{"messageId":"m7"}\n\n');
+		parser.push(
+			': keep-alive\nid: 4\nretry: 100\nfoo: bar\nevent:widget_done\ndata:{"messageId":"m7"}\n\n'
+		);
 		expect(messages).toEqual([{ event: 'widget_done', data: { messageId: 'm7' } }]);
 	});
 

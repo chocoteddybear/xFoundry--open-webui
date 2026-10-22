@@ -59,7 +59,9 @@ const finish = (
 	error,
 	endedAt: now,
 	steps: state.steps.map((step) =>
-		step.status === 'running' ? { ...step, status: status === 'complete' ? 'complete' : 'error' } : step
+		step.status === 'running'
+			? { ...step, status: status === 'complete' ? 'complete' : 'error' }
+			: step
 	)
 });
 

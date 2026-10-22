@@ -32,7 +32,9 @@ const stopServer = () => {
 // Does what Chat.svelte does today: join the chat room on every (re)connect.
 const openTab = (forceNew = false) => {
 	const socket = io(`http://127.0.0.1:${port}`, { ...options, forceNew });
-	socket.on('connect', () => socket.emit('events:chat', { chat_id: 'A', data: { type: 'join' } }, () => {}));
+	socket.on('connect', () =>
+		socket.emit('events:chat', { chat_id: 'A', data: { type: 'join' } }, () => {})
+	);
 	sockets.push(socket);
 	return socket;
 };
@@ -46,31 +48,27 @@ afterAll(() => {
 });
 
 describe.skipIf(!enabled)('live session socket against a real Socket.IO server', () => {
-	it(
-		'tracks connected → reconnecting → connected across a server restart and rejoins the chat room',
-		async () => {
-			startServer();
-			const tab = openTab();
-			const stop = followSocketStore(writable<Socket | null>(tab));
+	it('tracks connected → reconnecting → connected across a server restart and rejoins the chat room', async () => {
+		startServer();
+		const tab = openTab();
+		const stop = followSocketStore(writable<Socket | null>(tab));
 
-			await waitFor(() => expect(get(socketState)).toBe('connected'));
-			await waitFor(() => expect(viewers()).toBe(1));
+		await waitFor(() => expect(get(socketState)).toBe('connected'));
+		await waitFor(() => expect(viewers()).toBe(1));
 
-			openTab(true);
-			await waitFor(() => expect(viewers()).toBe(2));
+		openTab(true);
+		await waitFor(() => expect(viewers()).toBe(2));
 
-			stopServer();
-			await waitFor(() => expect(get(socketState)).toBe('reconnecting'));
-			expect(viewers()).toBeNull();
+		stopServer();
+		await waitFor(() => expect(get(socketState)).toBe('reconnecting'));
+		expect(viewers()).toBeNull();
 
-			startServer();
-			await waitFor(() => expect(get(socketState)).toBe('connected'));
-			await waitFor(() => expect(viewers()).toBe(2));
+		startServer();
+		await waitFor(() => expect(get(socketState)).toBe('connected'));
+		await waitFor(() => expect(viewers()).toBe(2));
 
-			tab.close();
-			expect(get(socketState)).toBe('offline');
-			stop();
-		},
-		30000
-	);
+		tab.close();
+		expect(get(socketState)).toBe('offline');
+		stop();
+	}, 30000);
 });

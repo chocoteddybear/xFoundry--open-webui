@@ -26,9 +26,14 @@ let nextRunId = 0;
 // can never write into the widget of a newer run.
 const isCurrent = (key: string, run: Run) => runs.get(key) === run;
 
-const fail = (key: string, error: string) => updateLiveSession(key, (state) => failLiveSession(state, error));
+const fail = (key: string, error: string) =>
+	updateLiveSession(key, (state) => failLiveSession(state, error));
 
-export const startLiveSession = async (chatId: string, messageId: string, options: StartOptions) => {
+export const startLiveSession = async (
+	chatId: string,
+	messageId: string,
+	options: StartOptions
+) => {
 	const key = liveSessionKey(chatId, messageId);
 	runs.get(key)?.controller.abort();
 

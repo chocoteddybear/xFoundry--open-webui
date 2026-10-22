@@ -76,7 +76,11 @@ describe('reduceLiveSession', () => {
 	});
 
 	it('updates a step in place and keeps its label when the update has none', () => {
-		const { state } = run([step('a', 'running', 'First'), step('b', 'running', 'Second'), step('a', 'complete')]);
+		const { state } = run([
+			step('a', 'running', 'First'),
+			step('b', 'running', 'Second'),
+			step('a', 'complete')
+		]);
 		expect(state.steps).toEqual([
 			{ id: 'a', label: 'First', status: 'complete' },
 			{ id: 'b', label: 'Second', status: 'running' }
@@ -108,7 +112,11 @@ describe('reduceLiveSession', () => {
 	});
 
 	it('stores the error and marks running steps as failed on widget_error', () => {
-		const { state } = run([step('retrieval', 'complete'), step('draft', 'running'), error('Upstream timed out')]);
+		const { state } = run([
+			step('retrieval', 'complete'),
+			step('draft', 'running'),
+			error('Upstream timed out')
+		]);
 		expect(state.status).toBe('error');
 		expect(state.error).toBe('Upstream timed out');
 		expect(state.steps.map((s) => s.status)).toEqual(['complete', 'error']);
@@ -160,12 +168,21 @@ describe('reduceLiveSession', () => {
 	it.each([
 		['no data', { event: 'widget_delta', data: null }],
 		['data is not an object', { event: 'widget_delta', data: 'text' }],
-		['missing messageId', { event: 'widget_delta', data: { type: 'step', id: 'a', status: 'running' } }],
+		[
+			'missing messageId',
+			{ event: 'widget_delta', data: { type: 'step', id: 'a', status: 'running' } }
+		],
 		['unknown event', { event: 'widget_tick', data: { messageId: 'm7' } }],
 		['unknown delta type', { event: 'widget_delta', data: { messageId: 'm7', type: 'log' } }],
-		['step without id', { event: 'widget_delta', data: { messageId: 'm7', type: 'step', status: 'running' } }],
+		[
+			'step without id',
+			{ event: 'widget_delta', data: { messageId: 'm7', type: 'step', status: 'running' } }
+		],
 		['unknown step status', step('a', 'paused')],
-		['metric without key', { event: 'widget_delta', data: { messageId: 'm7', type: 'metric', value: 1 } }],
+		[
+			'metric without key',
+			{ event: 'widget_delta', data: { messageId: 'm7', type: 'metric', value: 1 } }
+		],
 		['metric with an object value', metric('tokens', { n: 1 })]
 	] as [string, SSEMessage][])('rejects an invalid message: %s', (_, message) => {
 		const { state, outcomes } = run([message]);
@@ -183,7 +200,9 @@ describe('reduceLiveSession', () => {
 
 	it('never mutates the state it receives', () => {
 		const start = deepFreeze(createLiveSession('A', 'm7', 0));
-		expect(() => run([...SCRIPT, done, { event: 'x', raw: '', malformed: true }], start)).not.toThrow();
+		expect(() =>
+			run([...SCRIPT, done, { event: 'x', raw: '', malformed: true }], start)
+		).not.toThrow();
 		expect(start.status).toBe('starting');
 	});
 });

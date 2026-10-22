@@ -59,11 +59,17 @@ export const removeLiveSessions = (chatId: string) => {
 
 export const getLiveSession = (key: string): LiveSessionState | undefined => get(liveSessions)[key];
 
-export const liveSessionFor = (chatId: string, messageId: string): Readable<LiveSessionState | null> =>
+export const liveSessionFor = (
+	chatId: string,
+	messageId: string
+): Readable<LiveSessionState | null> =>
 	select(liveSessions, (sessions) => sessions[liveSessionKey(chatId, messageId)] ?? null);
 
 export const setChatLive = (chatId: string, info: Partial<ChatLiveInfo>) => {
-	chatLive.update((chats) => ({ ...chats, [chatId]: { ...(chats[chatId] ?? NO_CHAT_INFO), ...info } }));
+	chatLive.update((chats) => ({
+		...chats,
+		[chatId]: { ...(chats[chatId] ?? NO_CHAT_INFO), ...info }
+	}));
 };
 
 export const chatLiveFor = (chatId: string): Readable<ChatLiveInfo> =>

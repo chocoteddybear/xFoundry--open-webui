@@ -47,7 +47,8 @@ const mockFetch = vi.fn(async (url: string, init: RequestInit) => {
 	};
 	init.signal?.addEventListener('abort', () => {
 		stream.aborted = true;
-		if (!deliverAfterAbort) controller.error(new DOMException('The operation was aborted.', 'AbortError'));
+		if (!deliverAfterAbort)
+			controller.error(new DOMException('The operation was aborted.', 'AbortError'));
 	});
 	streams.push(stream);
 	return new Response(nextStatus === 200 ? body : null, { status: nextStatus });
@@ -72,7 +73,12 @@ afterEach(() => {
 
 describe('startLiveSession', () => {
 	it('creates the session, calls the stream endpoint and applies the events', async () => {
-		const running = startLiveSession('A', 'm1', { ...options, faults: ['split', 'duplicate'], fail: true, delayMs: 0 });
+		const running = startLiveSession('A', 'm1', {
+			...options,
+			faults: ['split', 'duplicate'],
+			fail: true,
+			delayMs: 0
+		});
 		expect(session('A:m1').status).toBe('starting');
 		await settle();
 
@@ -96,7 +102,10 @@ describe('startLiveSession', () => {
 		stream.push(tokens('m1', 42) + done('m1'));
 		stream.close();
 		await running;
-		expect(session('A:m1')).toMatchObject({ status: 'complete', metrics: { tokens: { value: 42 } } });
+		expect(session('A:m1')).toMatchObject({
+			status: 'complete',
+			metrics: { tokens: { value: 42 } }
+		});
 		expect(isLiveSessionRunning('A', 'm1')).toBe(false);
 	});
 
@@ -151,7 +160,10 @@ describe('startLiveSession', () => {
 		streams[1].push(tokens('m1', 7) + done('m1'));
 		streams[1].close();
 		await Promise.all([first, second]);
-		expect(session('A:m1')).toMatchObject({ status: 'complete', metrics: { tokens: { value: 7 } } });
+		expect(session('A:m1')).toMatchObject({
+			status: 'complete',
+			metrics: { tokens: { value: 7 } }
+		});
 	});
 
 	it('drops chunks the old run still receives after it was replaced', async () => {
