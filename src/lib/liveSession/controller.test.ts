@@ -4,7 +4,8 @@ import {
 	closeChatLiveSessions,
 	isLiveSessionRunning,
 	startLiveSession,
-	stopLiveSession
+	stopLiveSession,
+	stopMessageLiveSessions
 } from './controller';
 import { liveSessions } from './store';
 
@@ -124,7 +125,8 @@ describe('startLiveSession', () => {
 		await startLiveSession('A', 'm1', options);
 		expect(session('A:m1')).toMatchObject({
 			status: 'error',
-			error: 'Live session unavailable (HTTP 401)'
+			error: 'Live session unavailable (HTTP 401)',
+			retryable: true
 		});
 	});
 
@@ -215,7 +217,7 @@ describe('stopLiveSession', () => {
 		await running;
 
 		expect(streams[0].aborted).toBe(true);
-		expect(session('A:m1')).toMatchObject({ status: 'error', error: 'Stopped' });
+		expect(session('A:m1')).toMatchObject({ status: 'error', error: 'Stopped', retryable: false });
 		expect(session('A:m1').steps[0].status).toBe('error');
 		expect(isLiveSessionRunning('A', 'm1')).toBe(false);
 	});
@@ -228,6 +230,31 @@ describe('stopLiveSession', () => {
 		await running;
 		stopLiveSession('A', 'm1');
 		expect(session('A:m1').status).toBe('complete');
+	});
+});
+
+describe('stopMessageLiveSessions', () => {
+	it('stops only the runs for the given message ids, whatever chat they belong to', async () => {
+		const a = startLiveSession('local:abc', 'm1', options);
+		const b = startLiveSession('B', 'm2', options);
+		const c = startLiveSession('B', 'm3', options);
+		await settle();
+
+		stopMessageLiveSessions(['m1', 'm2'], 'Ollama: 500');
+		await Promise.all([a, b]);
+
+		expect(session('local:abc:m1')).toMatchObject({
+			status: 'error',
+			error: 'Ollama: 500',
+			retryable: false
+		});
+		expect(session('B:m2')).toMatchObject({ status: 'error', error: 'Ollama: 500' });
+		expect(streams.map((stream) => stream.aborted)).toEqual([true, true, false]);
+
+		streams[2].push(done('m3'));
+		streams[2].close();
+		await c;
+		expect(session('B:m3').status).toBe('complete');
 	});
 });
 

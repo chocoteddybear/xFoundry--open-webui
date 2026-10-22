@@ -209,7 +209,7 @@
 						role="alert"
 					>
 						<span class="flex-1 min-w-0">{$session.error}</span>
-						{#if onRetry}
+						{#if onRetry && $session.retryable}
 							<button
 								class="shrink-0 px-2 py-0.5 rounded-md font-medium bg-white/70 dark:bg-gray-900/60 hover:bg-white dark:hover:bg-gray-900 transition"
 								on:click={onRetry}

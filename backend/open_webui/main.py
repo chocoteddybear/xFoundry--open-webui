@@ -2431,6 +2431,7 @@ async def get_app_config(request: Request):
                     'enable_pyodide_file_persistence': ENABLE_PYODIDE_FILE_PERSISTENCE,
                     'enable_public_active_users_count': ENABLE_PUBLIC_ACTIVE_USERS_COUNT,
                     'enable_easter_eggs': ENABLE_EASTER_EGGS,
+                    'enable_live_session_mock': ENABLE_LIVE_SESSION_MOCK,
                     'enable_direct_connections': config.get('direct.enable'),
                     'enable_direct_integrations': ENABLE_TOOL_SERVERS
                     and config.get('direct.integrations.enable', False),

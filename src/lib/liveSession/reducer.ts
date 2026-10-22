@@ -15,6 +15,9 @@ export type LiveSessionState = {
 	steps: LiveStep[];
 	metrics: Record<string, LiveMetric>;
 	error: string | null;
+	// Retrying the widget stream only helps when the stream itself failed, not when the answer was
+	// stopped or the model failed (Regenerate is the right action then).
+	retryable: boolean;
 	startedAt: number;
 	endedAt: number | null;
 	ignored: Record<Exclude<Outcome, 'applied'>, number>;
@@ -33,6 +36,7 @@ export const createLiveSession = (
 	steps: [],
 	metrics: {},
 	error: null,
+	retryable: false,
 	startedAt: now,
 	endedAt: null,
 	ignored: { duplicate: 0, late: 0, malformed: 0, invalid: 0, 'other-message': 0 }
@@ -52,11 +56,13 @@ const finish = (
 	state: LiveSessionState,
 	status: 'complete' | 'error',
 	error: string | null,
-	now: number
+	now: number,
+	retryable = false
 ): LiveSessionState => ({
 	...state,
 	status,
 	error,
+	retryable,
 	endedAt: now,
 	steps: state.steps.map((step) =>
 		step.status === 'running'
@@ -83,7 +89,7 @@ export const reduceLiveSession = (
 
 	if (message.event === 'widget_error') {
 		const error = typeof data.message === 'string' ? data.message : 'The live session failed';
-		return applied(finish(state, 'error', error, now));
+		return applied(finish(state, 'error', error, now, true));
 	}
 
 	if (message.event !== 'widget_delta') return ignore(state, 'invalid');
@@ -123,5 +129,6 @@ export const reduceLiveSession = (
 export const failLiveSession = (
 	state: LiveSessionState,
 	error: string,
-	now = Date.now()
-): LiveSessionState => (isFinished(state) ? state : finish(state, 'error', error, now));
+	now = Date.now(),
+	retryable = true
+): LiveSessionState => (isFinished(state) ? state : finish(state, 'error', error, now, retryable));

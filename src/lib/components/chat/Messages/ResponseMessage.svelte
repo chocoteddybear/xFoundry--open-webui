@@ -68,6 +68,7 @@
 	import RegenerateMenu from './ResponseMessage/RegenerateMenu.svelte';
 	import StatusHistory from './ResponseMessage/StatusHistory.svelte';
 	import LiveSessionWidget from './ResponseMessage/LiveSessionWidget.svelte';
+	import { isLiveSessionEnabled, startMessageLiveSession } from '$lib/liveSession/app';
 	import FullHeightIframe from '$lib/components/common/FullHeightIframe.svelte';
 	import OutputEditView from './OutputEditView.svelte';
 	import { getOutputText, replaceOutputMessageText, type OutputItem } from './structuredOutput';
@@ -717,7 +718,13 @@
 							<StatusHistory statusHistory={message?.statusHistory} />
 						{/if}
 
-						<LiveSessionWidget {chatId} {messageId} />
+						<LiveSessionWidget
+							{chatId}
+							{messageId}
+							onRetry={isLiveSessionEnabled()
+								? () => startMessageLiveSession(chatId, messageId)
+								: null}
+						/>
 
 						{#if message?.files && message.files?.filter( (f) => ['image', 'file'].includes(f.type) ).length > 0}
 							<div

@@ -119,6 +119,7 @@ describe('reduceLiveSession', () => {
 		]);
 		expect(state.status).toBe('error');
 		expect(state.error).toBe('Upstream timed out');
+		expect(state.retryable).toBe(true);
 		expect(state.steps.map((s) => s.status)).toEqual(['complete', 'error']);
 	});
 
@@ -213,6 +214,13 @@ describe('failLiveSession', () => {
 		const failed = failLiveSession(running, 'Stopped', 50);
 		expect(failed).toMatchObject({ status: 'error', error: 'Stopped', endedAt: 50 });
 		expect(failed.steps[0].status).toBe('error');
+	});
+
+	it('is retryable by default, and not when the caller says so (Stop, model error)', () => {
+		const running = run([step('draft', 'running')]).state;
+		expect(failLiveSession(running, 'Network down').retryable).toBe(true);
+		expect(failLiveSession(running, 'Stopped', 50, false).retryable).toBe(false);
+		expect(createLiveSession('A', 'm7').retryable).toBe(false);
 	});
 
 	it('returns a finished session unchanged', () => {

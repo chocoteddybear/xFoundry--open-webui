@@ -26,8 +26,8 @@ let nextRunId = 0;
 // can never write into the widget of a newer run.
 const isCurrent = (key: string, run: Run) => runs.get(key) === run;
 
-const fail = (key: string, error: string) =>
-	updateLiveSession(key, (state) => failLiveSession(state, error));
+const fail = (key: string, error: string, retryable = true) =>
+	updateLiveSession(key, (state) => failLiveSession(state, error, Date.now(), retryable));
 
 export const startLiveSession = async (
 	chatId: string,
@@ -94,7 +94,18 @@ export const stopLiveSession = (chatId: string, messageId: string, reason = 'Sto
 		runs.delete(key);
 		run.controller.abort();
 	}
-	fail(key, reason);
+	fail(key, reason, false);
+};
+
+// Stop sends the message ids it is stopping; it may not know which chat id a run was started with.
+export const stopMessageLiveSessions = (messageIds: string[], reason = 'Stopped') => {
+	for (const [key, run] of runs) {
+		if (messageIds.includes(key.slice(key.lastIndexOf(':') + 1))) {
+			runs.delete(key);
+			run.controller.abort();
+			fail(key, reason, false);
+		}
+	}
 };
 
 // Used when the user leaves a chat: streams are closed and their widgets removed, nothing is kept.

@@ -118,6 +118,9 @@
 	import { getSkills } from '$lib/apis/skills';
 	import { uploadFile } from '$lib/apis/files';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
+	import { startMessageLiveSession } from '$lib/liveSession/app';
+	import { closeChatLiveSessions, stopMessageLiveSessions } from '$lib/liveSession/controller';
+	import { followSocketStore } from '$lib/liveSession/socket';
 	import { getFunctions } from '$lib/apis/functions';
 	import { initiateOAuthRedirect } from '$lib/apis/configs';
 
@@ -1471,6 +1474,12 @@
 	};
 	$: syncChatRoom($socket, $chatId, $temporaryChatEnabled);
 
+	let liveSessionChatId = '';
+	$: if (($chatId ?? '') !== liveSessionChatId) {
+		if (liveSessionChatId) closeChatLiveSessions(liveSessionChatId);
+		liveSessionChatId = $chatId ?? '';
+	}
+
 	const chatEventHandler = async (event, cb) => {
 		if (event?.data?.type === 'chat:presence') {
 			if (!$socket?.connected || event.chat_id !== $chatId || event.chat_id !== joinedChatId)
@@ -1616,6 +1625,7 @@
 					}
 					autoScrollToBottom();
 				} else if (type === 'chat:tasks:cancel') {
+					stopMessageLiveSessions([event.message_id]);
 					for (const interaction of browserInteractions) {
 						if (interaction.messageId === event.message_id) {
 							resolveBrowserInteraction(interaction, { status: 'cancelled', answers: {} });
@@ -1662,6 +1672,10 @@
 						}
 					}, 100);
 				} else if (type === 'chat:message:error') {
+					stopMessageLiveSessions(
+						[event.message_id],
+						data?.error?.content ?? $i18n.t('The response failed')
+					);
 					const responseCompleted = message.done;
 					if (event.shared) {
 						message.error = data.error;
@@ -1916,6 +1930,7 @@
 		$socket?.on('connect', handleSocketConnect);
 		$socket?.on('disconnect', clearTyping);
 		$socket?.on('disconnect', clearPresence);
+		const stopLiveSocket = followSocketStore(socket);
 		$socket?.on('disconnect', cancelBrowserInteractions);
 
 		$audioQueue?.destroy();
@@ -1998,6 +2013,8 @@
 
 		return () => {
 			try {
+				stopLiveSocket();
+				if (liveSessionChatId) closeChatLiveSessions(liveSessionChatId);
 				cancelBrowserInteractions();
 				clearTimeout(saveControlsTimer);
 				saveControls();
@@ -4065,6 +4082,11 @@
 		const primaryResponseMessageId = messageIdsList[0]?.message_id;
 		let submittedTaskIds: string[] = [];
 
+		// A brand-new chat only gets its id from the completion response, so its widgets start there.
+		const startLiveSessions = (id: string) =>
+			messageIdsList.forEach(({ message_id }) => startMessageLiveSession(id, message_id));
+		if (_chatId) startLiveSessions(_chatId);
+
 		if (primaryModel && primaryResponseMessageId) {
 			const chatEventEmitter = await getChatEventEmitter(primaryModel.id, _chatId);
 
@@ -4089,6 +4111,7 @@
 				);
 				submittedTaskIds =
 					completion?.task_ids ?? (completion?.task_id ? [completion.task_id] : []);
+				if (!_chatId && completion?.chat_id) startLiveSessions(completion.chat_id);
 			} finally {
 				if (chatEventEmitter) clearInterval(chatEventEmitter);
 			}
@@ -4514,6 +4537,12 @@
 
 			taskIds = null;
 
+			stopMessageLiveSessions(
+				responseMessage?.parentId && history.messages[responseMessage.parentId]
+					? history.messages[responseMessage.parentId].childrenIds
+					: [messageId]
+			);
+
 			// Set all response messages to done
 			if (responseMessage?.parentId && history.messages[responseMessage.parentId]) {
 				for (const messageId of history.messages[responseMessage.parentId].childrenIds) {
@@ -4619,6 +4648,7 @@
 				.at(0);
 
 			if (model) {
+				startMessageLiveSession(_chatId, responseMessage.id);
 				await sendMessageSocket(
 					model,
 					createMessagesList(history, responseMessage.id),
