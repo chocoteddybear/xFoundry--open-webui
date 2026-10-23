@@ -1,9 +1,23 @@
-# HTTPS certificate is issued automatically for SITE_ADDRESS (e.g. 165-245-163-103.sslip.io).
+# HTTPS certificate is issued automatically for SITE_ADDRESS (e.g. <ip-with-dashes>.sslip.io).
+#
+# Access gate: open https://SITE_ADDRESS/?key=DEMO_KEY once; the browser gets a 7-day cookie and
+# everything else (pages, API, WebSockets, SSE) passes with it. Without the key or the cookie: 404.
+# A cookie is used instead of a password prompt because Open WebUI sends its own
+# "Authorization: Bearer" header, which would replace the browser's Basic-auth header.
 {$SITE_ADDRESS} {
-	# Password prompt in front of everything, so the app is not visible to the public.
-	basic_auth {
-		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	@allowed header Cookie *demo_key={$DEMO_KEY}*
+	@unlock query key={$DEMO_KEY}
+
+	handle @allowed {
+		reverse_proxy open-webui:8080
 	}
-	# Plain reverse proxy: WebSockets and server-sent events pass through as they are.
-	reverse_proxy open-webui:8080
+
+	handle @unlock {
+		header Set-Cookie "demo_key={$DEMO_KEY}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Lax"
+		redir / 302
+	}
+
+	handle {
+		respond "Not found" 404
+	}
 }

@@ -78,5 +78,6 @@ jobs:
           ssh "$TARGET" "cd /opt/owui-demo \
             && docker compose pull \
             && docker compose up -d --remove-orphans \
+            && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile \
             && docker image prune -f \
             && docker logout ghcr.io"
