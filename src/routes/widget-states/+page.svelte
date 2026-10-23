@@ -3,7 +3,11 @@
 	// buttons that play the real mock SSE stream through the real parser, reducer and store.
 	import { onMount } from 'svelte';
 	import LiveSessionWidget from '$lib/components/chat/Messages/ResponseMessage/LiveSessionWidget.svelte';
-	import { createLiveSession, failLiveSession, reduceLiveSession } from '$lib/liveSession/reducer';
+	import {
+		createLiveSession,
+		markLiveSessionStopped,
+		reduceLiveSession
+	} from '$lib/liveSession/reducer';
 	import { startLiveSession } from '$lib/liveSession/controller';
 	import {
 		setChatLive,
@@ -109,11 +113,8 @@
 			)
 		);
 		setLiveSession(
-			failLiveSession(
-				build('stopped', [step('stopped', 'draft', 'running', 'Drafting the answer')], 2500),
-				'Stopped',
-				Date.now(),
-				false
+			markLiveSessionStopped(
+				build('stopped', [step('stopped', 'draft', 'running', 'Drafting the answer')], 2500)
 			)
 		);
 	});
