@@ -3,11 +3,13 @@
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 
-	import { isFinished, type LiveMetric } from '$lib/liveSession/reducer';
+	import { isFinished, tokensPerSecond, type LiveMetric } from '$lib/liveSession/reducer';
 	import { chatLiveFor, liveSessionFor, socketState } from '$lib/liveSession/store';
 	import Check from '$lib/components/icons/Check.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
 	import ChevronDown from '$lib/components/icons/ChevronDown.svelte';
+	import ArrowPath from '$lib/components/icons/ArrowPath.svelte';
+	import Users from '$lib/components/icons/Users.svelte';
 
 	const i18n: Writable<i18nType> = getContext('i18n');
 
@@ -35,7 +37,13 @@
 	onDestroy(() => timer && clearInterval(timer));
 
 	$: elapsed = $session ? (($session.endedAt ?? now) - $session.startedAt) / 1000 : 0;
-	$: currentStep = $session?.steps.find((step) => step.status === 'running') ?? null;
+	$: stopped = !!$session?.stopped;
+	$: failed = $session?.status === 'error' && !stopped;
+	$: tokens =
+		typeof $session?.metrics.tokens?.value === 'number' ? $session.metrics.tokens.value : null;
+	$: rate = $session ? tokensPerSecond($session, now) : null;
+	$: quiet = compact && !running;
+	$: showConnection = !(quiet && $socketState === 'connected');
 
 	const STATUS_LABEL = {
 		starting: 'Starting',
@@ -43,10 +51,11 @@
 		complete: 'Complete',
 		error: 'Error'
 	};
-	const SOCKET_LABEL = {
-		connected: 'Live',
-		reconnecting: 'Reconnecting',
-		offline: 'Offline'
+
+	const formatDuration = (seconds: number) => {
+		if (seconds < 60) return `${seconds.toFixed(1)}s`;
+		const m = Math.floor(seconds / 60);
+		return `${m}m ${String(Math.floor(seconds % 60)).padStart(2, '0')}s`;
 	};
 
 	const formatMetric = (key: string, metric: LiveMetric) => {
@@ -59,165 +68,201 @@
 
 {#if $session}
 	<div
-		class="my-1.5 w-full max-w-xl rounded-xl border text-xs text-gray-700 dark:text-gray-300 bg-gray-50/70 dark:bg-gray-850/40 {$session.status ===
-		'error'
-			? 'border-red-200 dark:border-red-900/60'
-			: 'border-gray-100 dark:border-gray-800'}"
+		class="my-1.5 w-full max-w-xl rounded-xl border text-xs text-gray-600 dark:text-gray-400 transition-colors {quiet
+			? 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-850/50'
+			: 'border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850/40'}"
 		role="group"
 		aria-label={$i18n.t('Live session')}
 		data-status={$session.status}
 	>
-		<div class="flex items-start gap-2 px-3 py-2">
-			<div class="flex flex-1 min-w-0 flex-wrap items-center gap-x-2.5 gap-y-1">
-				<span class="flex items-center gap-1.5 font-medium" aria-live="polite">
-					<span class="relative flex size-2">
-						{#if $session.status === 'streaming'}
-							<span
-								class="absolute inline-flex size-full rounded-full bg-blue-400 opacity-60 motion-safe:animate-ping"
-							></span>
-						{/if}
-						<span
-							class="relative inline-flex size-2 rounded-full {$session.status === 'starting'
-								? 'bg-gray-400 motion-safe:animate-pulse'
-								: $session.status === 'streaming'
-									? 'bg-blue-500'
-									: $session.status === 'complete'
-										? 'bg-green-500'
-										: 'bg-red-500'}"
-						></span>
-					</span>
-					{$i18n.t(STATUS_LABEL[$session.status])}
-				</span>
-
-				<span class="tabular-nums text-gray-500 dark:text-gray-400">{elapsed.toFixed(1)}s</span>
-
-				{#if compact}
-					<span class="flex-1 min-w-0 truncate text-gray-500 dark:text-gray-400">
-						{#if currentStep}
-							{currentStep.label}
-						{:else if $session.steps.length}
-							{$i18n.t('{{COUNT}} steps', { COUNT: $session.steps.length })}
-						{/if}
-						{#if $session.metrics.tokens}
-							· {$i18n.t('{{COUNT}} tokens', { COUNT: $session.metrics.tokens.value })}
-						{/if}
-					</span>
-				{:else}
-					<span class="flex-1"></span>
-				{/if}
-
-				<span
-					class="flex items-center gap-1 text-gray-500 dark:text-gray-400"
-					title={$i18n.t('Realtime connection')}
-				>
+		<button
+			type="button"
+			class="flex w-full items-center gap-2 px-3 py-2 text-left rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+			aria-expanded={!compact}
+			aria-controls={bodyId}
+			on:click={() => {
+				compact = !compact;
+				userToggled = true;
+			}}
+		>
+			<span class="flex size-3.5 shrink-0 items-center justify-center" aria-hidden="true">
+				{#if $session.status === 'starting'}
+					<span class="size-1.5 rounded-full bg-gray-400 motion-safe:animate-pulse"></span>
+				{:else if $session.status === 'streaming'}
 					<span
-						class="inline-flex size-1.5 rounded-full {$socketState === 'connected'
-							? 'bg-green-500'
-							: $socketState === 'reconnecting'
-								? 'bg-yellow-500 motion-safe:animate-pulse'
-								: 'bg-red-500'}"
+						class="size-3 rounded-full border-[1.5px] border-blue-500/25 border-t-blue-500 motion-safe:animate-spin"
 					></span>
-					{$i18n.t(SOCKET_LABEL[$socketState])}
-				</span>
+				{:else if $session.status === 'complete'}
+					<Check className="size-3.5 text-gray-400 dark:text-gray-500" strokeWidth="2.5" />
+				{:else if stopped}
+					<span class="size-2 rounded-[2px] bg-gray-400 dark:bg-gray-500"></span>
+				{:else}
+					<XMark className="size-3.5 text-red-500" strokeWidth="2.5" />
+				{/if}
+			</span>
 
+			<span class="flex flex-1 min-w-0 items-baseline gap-1.5 whitespace-nowrap">
 				<span
-					class="text-gray-500 dark:text-gray-400 {$socketState === 'connected'
+					class="font-medium {failed
+						? 'text-red-600 dark:text-red-400'
+						: 'text-gray-800 dark:text-gray-200'}"
+					aria-live="polite"
+				>
+					{stopped ? $i18n.t('Stopped') : $i18n.t(STATUS_LABEL[$session.status])}
+				</span>
+				<span class="tabular-nums">{formatDuration(elapsed)}</span>
+				{#if compact && tokens !== null}
+					<span class="truncate tabular-nums text-gray-500">
+						· {$i18n.t('{{COUNT}} tokens', { COUNT: tokens.toLocaleString() })}{rate
+							? ` · ${$i18n.t('{{COUNT}} tokens/s', { COUNT: rate })}`
+							: ''}
+					</span>
+				{/if}
+			</span>
+
+			{#if showConnection}
+				<span
+					class="flex shrink-0 items-center gap-1 rounded-full px-1.5 py-0.5 {$socketState ===
+					'connected'
 						? ''
-						: 'opacity-50'}"
+						: $socketState === 'reconnecting'
+							? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+							: 'bg-red-500/10 text-red-600 dark:text-red-400'}"
 					title={$chatInfo.sessionStatus
 						? $i18n.t('Chat session: {{STATUS}}', { STATUS: $chatInfo.sessionStatus })
-						: undefined}
+						: $i18n.t('Realtime connection')}
 				>
-					{#if $socketState === 'connected' && $chatInfo.activeViewers !== null}
-						{$i18n.t('{{COUNT}} viewing', { COUNT: $chatInfo.activeViewers })}
+					{#if $socketState === 'connected'}
+						<span class="size-1.5 rounded-full bg-green-500" aria-hidden="true"></span>
+						<span class="sr-only">{$i18n.t('Connected')},</span>
+						<Users className="size-3.5 ml-0.5" strokeWidth="1.75" />
+						<span class="tabular-nums">
+							{#if $chatInfo.activeViewers !== null}
+								{$chatInfo.activeViewers}<span class="max-sm:hidden">{' '}{$i18n.t('viewing')}</span
+								>
+							{:else}
+								{$i18n.t('Viewers unknown')}
+							{/if}
+						</span>
 					{:else}
-						{$i18n.t('Viewers unknown')}
+						<span
+							class="size-1.5 rounded-full {$socketState === 'reconnecting'
+								? 'bg-amber-500 motion-safe:animate-pulse'
+								: 'bg-red-500'}"
+							aria-hidden="true"
+						></span>
+						{$socketState === 'reconnecting' ? $i18n.t('Reconnecting…') : $i18n.t('Offline')}
 					{/if}
 				</span>
-			</div>
+			{/if}
 
-			<button
-				class="shrink-0 p-0.5 -mr-1 rounded-md text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800 transition"
-				aria-expanded={!compact}
-				aria-controls={bodyId}
-				aria-label={compact
-					? $i18n.t('Show live session details')
-					: $i18n.t('Hide live session details')}
-				on:click={() => {
-					compact = !compact;
-					userToggled = true;
-				}}
-			>
-				<ChevronDown
-					className="size-3.5 transition {compact ? '' : 'rotate-180'}"
-					strokeWidth="2"
-				/>
-			</button>
-		</div>
+			<ChevronDown
+				className="size-3.5 shrink-0 text-gray-400 transition-transform {compact
+					? ''
+					: 'rotate-180'}"
+				strokeWidth="2"
+			/>
+			<span class="sr-only">
+				{compact ? $i18n.t('Show live session details') : $i18n.t('Hide live session details')}
+			</span>
+		</button>
 
 		{#if !compact}
-			<div id={bodyId} class="flex flex-col gap-2 px-3 pb-2.5">
+			<div id={bodyId} class="flex flex-col gap-3 px-3 pb-3">
 				{#if $session.status === 'starting'}
-					<div class="text-gray-500 dark:text-gray-400">
-						{$i18n.t('Waiting for the first update…')}
+					<div class="flex flex-col gap-1.5 pl-[1.375rem]" aria-hidden="true">
+						<span
+							class="h-2 w-40 rounded-full bg-gray-200/80 dark:bg-gray-800 motion-safe:animate-pulse"
+						></span>
+						<span
+							class="h-2 w-24 rounded-full bg-gray-200/80 dark:bg-gray-800 motion-safe:animate-pulse"
+						></span>
 					</div>
+					<span class="sr-only">{$i18n.t('Waiting for the first update…')}</span>
 				{/if}
 
 				{#if $session.steps.length}
-					<ol class="flex flex-col gap-1">
-						{#each $session.steps as step (step.id)}
-							<li class="flex items-center gap-2">
-								{#if step.status === 'running'}
+					<ol class="flex flex-col">
+						{#each $session.steps as step, i (step.id)}
+							<li class="relative flex items-center gap-2 py-[3px]">
+								{#if i < $session.steps.length - 1}
 									<span
-										class="size-3 shrink-0 rounded-full border-[1.5px] border-blue-500 border-t-transparent motion-safe:animate-spin"
+										class="absolute left-[6.5px] top-[17px] h-[calc(100%-12px)] w-px bg-gray-200 dark:bg-gray-700"
 										aria-hidden="true"
 									></span>
-								{:else if step.status === 'complete'}
-									<Check
-										className="size-3 shrink-0 text-green-600 dark:text-green-500"
-										strokeWidth="3"
-									/>
-								{:else}
-									<XMark
-										className="size-3 shrink-0 text-red-600 dark:text-red-500"
-										strokeWidth="3"
-									/>
 								{/if}
-								<span class="flex-1 min-w-0 truncate">{step.label}</span>
-								<span class="sr-only">{$i18n.t(step.status)}</span>
+								<span class="flex size-3.5 shrink-0 items-center justify-center" aria-hidden="true">
+									{#if step.status === 'running'}
+										<span
+											class="size-3 rounded-full border-[1.5px] border-blue-500/25 border-t-blue-500 motion-safe:animate-spin"
+										></span>
+									{:else if step.status === 'complete'}
+										<Check className="size-3 text-gray-400 dark:text-gray-500" strokeWidth="2.5" />
+									{:else if stopped}
+										<span class="size-1.5 rounded-full bg-gray-300 dark:bg-gray-600"></span>
+									{:else}
+										<XMark className="size-3 text-red-500" strokeWidth="2.5" />
+									{/if}
+								</span>
+								<span
+									class="flex-1 min-w-0 truncate {step.status === 'running'
+										? 'text-gray-900 dark:text-gray-100'
+										: step.status === 'error' && !stopped
+											? 'text-red-600 dark:text-red-400'
+											: ''}">{step.label}</span
+								>
+								<span class="sr-only"
+									>{$i18n.t(stopped && step.status === 'error' ? 'stopped' : step.status)}</span
+								>
 							</li>
 						{/each}
 					</ol>
 				{/if}
 
 				{#if Object.keys($session.metrics).length}
-					<div class="flex flex-wrap gap-1.5">
+					<dl
+						class="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-x-3 gap-y-2 border-t border-gray-100 dark:border-gray-800 pt-2.5"
+					>
 						{#each Object.entries($session.metrics) as [key, metric] (key)}
-							<span
-								class="flex items-center gap-1 rounded-md px-1.5 py-0.5 bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800"
-							>
-								<span class="text-gray-500 dark:text-gray-400">{metric.label}</span>
-								<span class="font-medium tabular-nums">{formatMetric(key, metric)}</span>
-							</span>
+							<div class="flex flex-col-reverse">
+								<dt class="text-[11px] text-gray-500">{metric.label}</dt>
+								<dd class="text-sm font-medium tabular-nums text-gray-900 dark:text-gray-100">
+									{formatMetric(key, metric)}
+								</dd>
+							</div>
 						{/each}
-					</div>
+						{#if rate}
+							<div class="flex flex-col-reverse">
+								<dt
+									class="text-[11px] text-gray-500"
+									title={$i18n.t('Average over the whole session')}
+								>
+									{$i18n.t('Avg tokens/s')}
+								</dt>
+								<dd class="text-sm font-medium tabular-nums text-gray-900 dark:text-gray-100">
+									{rate}
+								</dd>
+							</div>
+						{/if}
+					</dl>
 				{/if}
 
-				{#if $session.status === 'error'}
-					<div
-						class="flex items-center gap-2 rounded-lg px-2 py-1.5 bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-400"
-						role="alert"
-					>
+				{#if failed}
+					<div class="flex items-center gap-3 text-red-600 dark:text-red-400" role="alert">
 						<span class="flex-1 min-w-0">{$session.error}</span>
 						{#if onRetry && $session.retryable}
 							<button
-								class="shrink-0 px-2 py-0.5 rounded-md font-medium bg-white/70 dark:bg-gray-900/60 hover:bg-white dark:hover:bg-gray-900 transition"
+								type="button"
+								class="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1 font-medium text-gray-800 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition"
 								on:click={onRetry}
 							>
+								<ArrowPath className="size-3" strokeWidth="2" />
 								{$i18n.t('Retry')}
 							</button>
 						{/if}
 					</div>
+				{:else if stopped}
+					<div class="text-gray-500">{$i18n.t('Stopped before the answer finished.')}</div>
 				{/if}
 			</div>
 		{/if}

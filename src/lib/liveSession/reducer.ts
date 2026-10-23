@@ -18,6 +18,8 @@ export type LiveSessionState = {
 	// Retrying the widget stream only helps when the stream itself failed, not when the answer was
 	// stopped or the model failed (Regenerate is the right action then).
 	retryable: boolean;
+	// Set when the user pressed Stop: the session ends in 'error' but the UI shows it as neutral.
+	stopped: boolean;
 	startedAt: number;
 	endedAt: number | null;
 	ignored: Record<Exclude<Outcome, 'applied'>, number>;
@@ -37,6 +39,7 @@ export const createLiveSession = (
 	metrics: {},
 	error: null,
 	retryable: false,
+	stopped: false,
 	startedAt: now,
 	endedAt: null,
 	ignored: { duplicate: 0, late: 0, malformed: 0, invalid: 0, 'other-message': 0 }
@@ -132,3 +135,18 @@ export const failLiveSession = (
 	now = Date.now(),
 	retryable = true
 ): LiveSessionState => (isFinished(state) ? state : finish(state, 'error', error, now, retryable));
+
+export const markLiveSessionStopped = (
+	state: LiveSessionState,
+	now = Date.now()
+): LiveSessionState =>
+	isFinished(state) ? state : { ...finish(state, 'error', 'Stopped', now), stopped: true };
+
+// Average over the whole session, including the wait for the first token.
+export const tokensPerSecond = (state: LiveSessionState, now = Date.now()) => {
+	const tokens = state.metrics.tokens?.value;
+	const seconds = ((state.endedAt ?? now) - state.startedAt) / 1000;
+	return typeof tokens === 'number' && tokens > 0 && seconds >= 1
+		? Math.round(tokens / seconds)
+		: null;
+};

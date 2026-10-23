@@ -1,6 +1,12 @@
 import { WEBUI_API_BASE_URL } from '$lib/constants';
 import { createSSEParser } from './sse';
-import { createLiveSession, failLiveSession, isFinished, reduceLiveSession } from './reducer';
+import {
+	createLiveSession,
+	failLiveSession,
+	isFinished,
+	markLiveSessionStopped,
+	reduceLiveSession
+} from './reducer';
 import {
 	getLiveSession,
 	liveSessionKey,
@@ -28,6 +34,12 @@ const isCurrent = (key: string, run: Run) => runs.get(key) === run;
 
 const fail = (key: string, error: string, retryable = true) =>
 	updateLiveSession(key, (state) => failLiveSession(state, error, Date.now(), retryable));
+
+// No reason means the user pressed Stop; a reason is a model or server error and stays an error.
+const end = (key: string, reason?: string) =>
+	reason === undefined
+		? updateLiveSession(key, (state) => markLiveSessionStopped(state))
+		: fail(key, reason, false);
 
 export const startLiveSession = async (
 	chatId: string,
@@ -87,23 +99,23 @@ export const startLiveSession = async (
 	}
 };
 
-export const stopLiveSession = (chatId: string, messageId: string, reason = 'Stopped') => {
+export const stopLiveSession = (chatId: string, messageId: string, reason?: string) => {
 	const key = liveSessionKey(chatId, messageId);
 	const run = runs.get(key);
 	if (run) {
 		runs.delete(key);
 		run.controller.abort();
 	}
-	fail(key, reason, false);
+	end(key, reason);
 };
 
 // Stop sends the message ids it is stopping; it may not know which chat id a run was started with.
-export const stopMessageLiveSessions = (messageIds: string[], reason = 'Stopped') => {
+export const stopMessageLiveSessions = (messageIds: string[], reason?: string) => {
 	for (const [key, run] of runs) {
 		if (messageIds.includes(key.slice(key.lastIndexOf(':') + 1))) {
 			runs.delete(key);
 			run.controller.abort();
-			fail(key, reason, false);
+			end(key, reason);
 		}
 	}
 };
