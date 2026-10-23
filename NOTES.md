@@ -13,13 +13,14 @@ A private demo runs on a DigitalOcean server. **The access link and a reviewer l
 3. Send again and press **Stop**: the widget shows a gray `Stopped`.
 4. Open the same chat in a second tab: `2 viewing`.
 5. Reload the page: finished widgets come back.
+6. Optional: open `/widget-states` on the demo address: every state of the widget on one page (starting, streaming, complete, error, stopped), with buttons to switch the WebSocket state and dark mode, and a "Live" section that plays the real mock stream (normal, broken data, fails halfway).
 
 `fake-model` is a free local test model; answers are always the same text. You can also pick `gpt-5-nano` (a real OpenAI model) from the model list: it gives real answers, but the widget's steps and metrics still come from the mock stream.
 
 ### How the demo is hosted
 
 - **Server:** one DigitalOcean Droplet (Ubuntu 24.04, 2 GB RAM), running Docker Compose with three containers: Open WebUI (with the flag on), the fake model and Caddy.
-- **Deploy:** a separate branch, `demo/deploy`, is this branch plus only the deploy files (`deploy/`, `.github/workflows/demo-deploy.yml`). On every push, GitHub Actions builds the slim Docker image (the frontend build needs more memory than the server has), stores it in GitHub's registry, then connects over SSH and restarts the containers. Accounts and chats live in a Docker volume, so they survive deploys.
+- **Deploy:** a separate branch, `demo/deploy`, is this branch plus the deploy files (`deploy/`, `Dockerfile`, `.github/workflows/demo-deploy.yml`) and the demo-only `/widget-states` page. On every push, GitHub Actions builds the slim Docker image (the frontend build needs more memory than the server has), stores it in GitHub's registry, then connects over SSH and restarts the containers. Accounts and chats live in a Docker volume, so they survive deploys.
 - **HTTPS:** Caddy gets a free Let's Encrypt certificate automatically. The address uses sslip.io, which turns the server IP into a host name, so no domain had to be bought.
 - **Access:** Caddy only lets in browsers that opened the secret link once (it sets a 7-day cookie); everyone else gets "Not found". Behind that is the normal Open WebUI login, with sign-ups turned off. The gate fails closed: if the secret is missing, nobody gets in, and the deploy refuses to run.
 - **Security basics:** SSH with keys only, firewall open only for SSH, HTTP and HTTPS. Secrets live only on the server and in GitHub Actions secrets, never in the repo. Workflow actions are pinned to exact commits.
