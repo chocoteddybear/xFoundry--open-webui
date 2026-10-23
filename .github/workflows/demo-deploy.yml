@@ -76,6 +76,7 @@ jobs:
           # The token goes through stdin so it never appears in a command line on the server.
           printf '%s' "$TOKEN" | ssh "$TARGET" "docker login ghcr.io -u '$ACTOR' --password-stdin"
           ssh "$TARGET" "cd /opt/owui-demo \
+            && (grep -Eq '^DEMO_KEY=[0-9a-f]{64}$' .env || { echo 'DEMO_KEY missing or invalid in .env, refusing to deploy'; exit 1; }) \
             && docker compose pull \
             && docker compose up -d --remove-orphans \
             && docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile \

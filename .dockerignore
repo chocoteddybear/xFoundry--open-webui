@@ -21,3 +21,6 @@ backend/data/*
 
 .venv
 .git
+
+# Demo deployment files are not part of the image; changing them should not invalidate the build cache.
+deploy/

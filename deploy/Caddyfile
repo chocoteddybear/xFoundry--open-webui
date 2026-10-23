@@ -5,8 +5,10 @@
 # A cookie is used instead of a password prompt because Open WebUI sends its own
 # "Authorization: Bearer" header, which would replace the browser's Basic-auth header.
 {$SITE_ADDRESS} {
-	@allowed header Cookie *demo_key={$DEMO_KEY}*
-	@unlock query key={$DEMO_KEY}
+	# Exact match, and fail closed: with a missing or short DEMO_KEY nothing matches, so the gate
+	# can never turn into "allow everyone". The deploy step also refuses to run without a valid key.
+	@allowed expression `{http.request.cookie.demo_key} == "{$DEMO_KEY}" && size("{$DEMO_KEY}") >= 32`
+	@unlock expression `{http.request.uri.query.key} == "{$DEMO_KEY}" && size("{$DEMO_KEY}") >= 32`
 
 	handle @allowed {
 		reverse_proxy open-webui:8080
