@@ -14,7 +14,7 @@ A private demo runs on a DigitalOcean server. **The access link and a reviewer l
 4. Open the same chat in a second tab: `2 viewing`.
 5. Reload the page: finished widgets come back.
 
-`fake-model` is a free local test model; answers are always the same text.
+`fake-model` is a free local test model; answers are always the same text. You can also pick `gpt-5-nano` (a real OpenAI model) from the model list: it gives real answers, but the widget's steps and metrics still come from the mock stream.
 
 ### How the demo is hosted
 
