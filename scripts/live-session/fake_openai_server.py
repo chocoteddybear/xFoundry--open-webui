@@ -5,6 +5,8 @@
 #
 # Then in Open WebUI: Admin Panel -> Settings -> Connections -> OpenAI API -> add
 #   URL: http://localhost:8099/v1   Key: anything
+from __future__ import annotations
+
 import json
 import sys
 import time
