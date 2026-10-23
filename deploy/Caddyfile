@@ -16,7 +16,7 @@
 
 	handle @unlock {
 		header Set-Cookie "demo_key={$DEMO_KEY}; Path=/; Max-Age=604800; Secure; HttpOnly; SameSite=Lax"
-		redir / 302
+		redir * / 302
 	}
 
 	handle {
