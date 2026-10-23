@@ -150,3 +150,68 @@ export const tokensPerSecond = (state: LiveSessionState, now = Date.now()) => {
 		? Math.round(tokens / seconds)
 		: null;
 };
+
+// What is saved with the assistant message so the finished widget can be shown again after a reload.
+export type LiveSnapshot = Pick<
+	LiveSessionState,
+	'status' | 'steps' | 'metrics' | 'error' | 'stopped' | 'startedAt' | 'endedAt'
+>;
+
+export const toSnapshot = (state: LiveSessionState): LiveSnapshot => ({
+	status: state.status,
+	steps: state.steps,
+	metrics: state.metrics,
+	error: state.error,
+	stopped: state.stopped,
+	startedAt: state.startedAt,
+	endedAt: state.endedAt
+});
+
+const isStep = (value: unknown): value is LiveStep => {
+	const step = value as LiveStep;
+	return (
+		!!step &&
+		typeof step.id === 'string' &&
+		typeof step.label === 'string' &&
+		STEP_STATUSES.includes(step.status)
+	);
+};
+
+const isMetric = (value: unknown): value is LiveMetric => {
+	const metric = value as LiveMetric;
+	return (
+		!!metric &&
+		typeof metric.label === 'string' &&
+		(typeof metric.value === 'number' || typeof metric.value === 'string')
+	);
+};
+
+// A snapshot comes back from storage, so anything that is not a finished session is ignored.
+export const fromSnapshot = (
+	chatId: string,
+	messageId: string,
+	value: unknown
+): LiveSessionState | null => {
+	const snapshot = value as Partial<LiveSnapshot> | null;
+	if (
+		!snapshot ||
+		typeof snapshot !== 'object' ||
+		(snapshot.status !== 'complete' && snapshot.status !== 'error') ||
+		!Array.isArray(snapshot.steps) ||
+		!snapshot.metrics ||
+		typeof snapshot.metrics !== 'object' ||
+		typeof snapshot.startedAt !== 'number' ||
+		typeof snapshot.endedAt !== 'number'
+	) {
+		return null;
+	}
+	return {
+		...createLiveSession(chatId, messageId, snapshot.startedAt),
+		status: snapshot.status,
+		steps: snapshot.steps.filter(isStep),
+		metrics: Object.fromEntries(Object.entries(snapshot.metrics).filter(([, m]) => isMetric(m))),
+		error: typeof snapshot.error === 'string' ? snapshot.error : null,
+		stopped: snapshot.stopped === true,
+		endedAt: snapshot.endedAt
+	};
+};

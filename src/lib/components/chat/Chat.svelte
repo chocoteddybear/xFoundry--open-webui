@@ -118,7 +118,12 @@
 	import { getSkills } from '$lib/apis/skills';
 	import { uploadFile } from '$lib/apis/files';
 	import { createOpenAITextStream } from '$lib/apis/streaming';
-	import { startMessageLiveSession } from '$lib/liveSession/app';
+	import {
+		onLiveSessionFinished,
+		saveLiveSessionSnapshot,
+		startMessageLiveSession
+	} from '$lib/liveSession/app';
+	import { toSnapshot } from '$lib/liveSession/reducer';
 	import { closeChatLiveSessions, stopMessageLiveSessions } from '$lib/liveSession/controller';
 	import { followSocketStore } from '$lib/liveSession/socket';
 	import { getFunctions } from '$lib/apis/functions';
@@ -1931,6 +1936,17 @@
 		$socket?.on('disconnect', clearTyping);
 		$socket?.on('disconnect', clearPresence);
 		const stopLiveSocket = followSocketStore(socket);
+		// The finished widget is kept on the message, in memory for later full-chat saves and in the
+		// database right away, so it is still there after a reload.
+		const stopLiveSnapshots = onLiveSessionFinished((state) => {
+			const snapshot = toSnapshot(state);
+			const message = state.chatId === $chatId ? history.messages[state.messageId] : null;
+			if (message) message.liveSession = snapshot;
+			if (isShared || $temporaryChatEnabled || isTemporaryChatId(state.chatId)) return;
+			saveLiveSessionSnapshot(localStorage.token, state.chatId, state.messageId, snapshot).catch(
+				(error) => console.error('[live session snapshot]', error)
+			);
+		});
 		$socket?.on('disconnect', cancelBrowserInteractions);
 
 		$audioQueue?.destroy();
@@ -2014,6 +2030,7 @@
 		return () => {
 			try {
 				stopLiveSocket();
+				stopLiveSnapshots();
 				if (liveSessionChatId) closeChatLiveSessions(liveSessionChatId);
 				cancelBrowserInteractions();
 				clearTimeout(saveControlsTimer);

@@ -3,7 +3,12 @@
 	import type { Writable } from 'svelte/store';
 	import type { i18n as i18nType } from 'i18next';
 
-	import { isFinished, tokensPerSecond, type LiveMetric } from '$lib/liveSession/reducer';
+	import {
+		fromSnapshot,
+		isFinished,
+		tokensPerSecond,
+		type LiveMetric
+	} from '$lib/liveSession/reducer';
 	import { chatLiveFor, liveSessionFor, socketState } from '$lib/liveSession/store';
 	import Check from '$lib/components/icons/Check.svelte';
 	import XMark from '$lib/components/icons/XMark.svelte';
@@ -16,18 +21,21 @@
 	export let chatId: string;
 	export let messageId: string;
 	export let onRetry: (() => void) | null = null;
+	// The finished state saved with the message; shown when there is no live session (after a reload).
+	export let snapshot: unknown = null;
 
 	$: session = liveSessionFor(chatId, messageId);
+	$: view = $session ?? fromSnapshot(chatId, messageId, snapshot);
 	$: chatInfo = chatLiveFor(chatId);
 	$: bodyId = `live-session-${messageId}`;
 
 	let compact = false;
 	let userToggled = false;
-	$: if ($session?.status === 'complete' && !userToggled) compact = true;
+	$: if (view && (view.status === 'complete' || !$session) && !userToggled) compact = true;
 
 	let now = Date.now();
 	let timer: ReturnType<typeof setInterval> | null = null;
-	$: running = !!$session && !isFinished($session);
+	$: running = !!view && !isFinished(view);
 	$: if (running && !timer) {
 		timer = setInterval(() => (now = Date.now()), 200);
 	} else if (!running && timer) {
@@ -36,12 +44,11 @@
 	}
 	onDestroy(() => timer && clearInterval(timer));
 
-	$: elapsed = $session ? (($session.endedAt ?? now) - $session.startedAt) / 1000 : 0;
-	$: stopped = !!$session?.stopped;
-	$: failed = $session?.status === 'error' && !stopped;
-	$: tokens =
-		typeof $session?.metrics.tokens?.value === 'number' ? $session.metrics.tokens.value : null;
-	$: rate = $session ? tokensPerSecond($session, now) : null;
+	$: elapsed = view ? ((view.endedAt ?? now) - view.startedAt) / 1000 : 0;
+	$: stopped = !!view?.stopped;
+	$: failed = view?.status === 'error' && !stopped;
+	$: tokens = typeof view?.metrics.tokens?.value === 'number' ? view.metrics.tokens.value : null;
+	$: rate = view ? tokensPerSecond(view, now) : null;
 	$: quiet = compact && !running;
 	$: showConnection = !(quiet && $socketState === 'connected');
 
@@ -66,18 +73,18 @@
 	};
 </script>
 
-{#if $session}
+{#if view}
 	<div
-		class="my-1.5 w-full max-w-xl rounded-xl border text-xs text-gray-600 dark:text-gray-400 transition-colors {quiet
-			? 'border-transparent hover:bg-gray-50 dark:hover:bg-gray-850/50'
-			: 'border-gray-100 dark:border-gray-800 bg-gray-50/60 dark:bg-gray-850/40'}"
+		class="my-1.5 w-full rounded-xl border bg-gray-50/60 dark:bg-gray-850/40 text-xs text-gray-600 dark:text-gray-400 {compact
+			? 'border-transparent'
+			: 'border-gray-100 dark:border-gray-800'}"
 		role="group"
 		aria-label={$i18n.t('Live session')}
-		data-status={$session.status}
+		data-status={view.status}
 	>
 		<button
 			type="button"
-			class="flex w-full items-center gap-2 px-3 py-2 text-left rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+			class="flex min-h-9 w-full items-center gap-2 px-3 py-1 text-left rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
 			aria-expanded={!compact}
 			aria-controls={bodyId}
 			on:click={() => {
@@ -86,13 +93,13 @@
 			}}
 		>
 			<span class="flex size-3.5 shrink-0 items-center justify-center" aria-hidden="true">
-				{#if $session.status === 'starting'}
+				{#if view.status === 'starting'}
 					<span class="size-1.5 rounded-full bg-gray-400 motion-safe:animate-pulse"></span>
-				{:else if $session.status === 'streaming'}
+				{:else if view.status === 'streaming'}
 					<span
 						class="size-3 rounded-full border-[1.5px] border-blue-500/25 border-t-blue-500 motion-safe:animate-spin"
 					></span>
-				{:else if $session.status === 'complete'}
+				{:else if view.status === 'complete'}
 					<Check className="size-3.5 text-gray-400 dark:text-gray-500" strokeWidth="2.5" />
 				{:else if stopped}
 					<span class="size-2 rounded-[2px] bg-gray-400 dark:bg-gray-500"></span>
@@ -108,7 +115,7 @@
 						: 'text-gray-800 dark:text-gray-200'}"
 					aria-live="polite"
 				>
-					{stopped ? $i18n.t('Stopped') : $i18n.t(STATUS_LABEL[$session.status])}
+					{stopped ? $i18n.t('Stopped') : $i18n.t(STATUS_LABEL[view.status])}
 				</span>
 				<span class="tabular-nums">{formatDuration(elapsed)}</span>
 				{#if compact && tokens !== null}
@@ -169,7 +176,7 @@
 
 		{#if !compact}
 			<div id={bodyId} class="flex flex-col gap-3 px-3 pb-3">
-				{#if $session.status === 'starting'}
+				{#if view.status === 'starting'}
 					<div class="flex flex-col gap-1.5 pl-[1.375rem]" aria-hidden="true">
 						<span
 							class="h-2 w-40 rounded-full bg-gray-200/80 dark:bg-gray-800 motion-safe:animate-pulse"
@@ -181,11 +188,11 @@
 					<span class="sr-only">{$i18n.t('Waiting for the first update…')}</span>
 				{/if}
 
-				{#if $session.steps.length}
+				{#if view.steps.length}
 					<ol class="flex flex-col">
-						{#each $session.steps as step, i (step.id)}
+						{#each view.steps as step, i (step.id)}
 							<li class="relative flex items-center gap-2 py-[3px]">
-								{#if i < $session.steps.length - 1}
+								{#if i < view.steps.length - 1}
 									<span
 										class="absolute left-[6.5px] top-[17px] h-[calc(100%-12px)] w-px bg-gray-200 dark:bg-gray-700"
 										aria-hidden="true"
@@ -219,11 +226,11 @@
 					</ol>
 				{/if}
 
-				{#if Object.keys($session.metrics).length}
+				{#if Object.keys(view.metrics).length}
 					<dl
 						class="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-x-3 gap-y-2 border-t border-gray-100 dark:border-gray-800 pt-2.5"
 					>
-						{#each Object.entries($session.metrics) as [key, metric] (key)}
+						{#each Object.entries(view.metrics) as [key, metric] (key)}
 							<div class="flex flex-col-reverse">
 								<dt class="text-[11px] text-gray-500">{metric.label}</dt>
 								<dd class="text-sm font-medium tabular-nums text-gray-900 dark:text-gray-100">
@@ -249,8 +256,8 @@
 
 				{#if failed}
 					<div class="flex items-center gap-3 text-red-600 dark:text-red-400" role="alert">
-						<span class="flex-1 min-w-0">{$session.error}</span>
-						{#if onRetry && $session.retryable}
+						<span class="flex-1 min-w-0">{view.error}</span>
+						{#if onRetry && view.retryable}
 							<button
 								type="button"
 								class="flex shrink-0 items-center gap-1 rounded-lg border border-gray-200 dark:border-gray-700 px-2 py-1 font-medium text-gray-800 dark:text-gray-200 hover:bg-white dark:hover:bg-gray-800 transition"

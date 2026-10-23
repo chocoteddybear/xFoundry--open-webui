@@ -2,8 +2,10 @@ import { describe, expect, it } from 'vitest';
 import {
 	createLiveSession,
 	failLiveSession,
+	fromSnapshot,
 	markLiveSessionStopped,
 	reduceLiveSession,
+	toSnapshot,
 	tokensPerSecond,
 	type LiveSessionState
 } from './reducer';
@@ -276,5 +278,48 @@ describe('tokensPerSecond', () => {
 		expect(tokensPerSecond(withTokens('many', 0, 5000))).toBeNull();
 		expect(tokensPerSecond(withTokens(0, 0, 5000))).toBeNull();
 		expect(tokensPerSecond(withTokens(40, 0, 900))).toBeNull();
+	});
+});
+
+describe('snapshots', () => {
+	it('round-trips a finished session through JSON', () => {
+		const finished = run(SCRIPT).state;
+		const saved = JSON.parse(JSON.stringify(toSnapshot(finished)));
+		const restored = fromSnapshot('A', 'm7', saved);
+		expect(restored).toMatchObject({
+			chatId: 'A',
+			messageId: 'm7',
+			status: finished.status,
+			steps: finished.steps,
+			metrics: finished.metrics,
+			startedAt: finished.startedAt,
+			endedAt: finished.endedAt,
+			retryable: false
+		});
+	});
+
+	it('keeps the stopped flag', () => {
+		const stopped = markLiveSessionStopped(run([step('draft', 'running')]).state, 50);
+		expect(fromSnapshot('A', 'm7', toSnapshot(stopped))?.stopped).toBe(true);
+	});
+
+	it('ignores anything that is not a finished session', () => {
+		const finished = toSnapshot(run(SCRIPT).state);
+		expect(fromSnapshot('A', 'm7', null)).toBeNull();
+		expect(fromSnapshot('A', 'm7', 'oops')).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, status: 'streaming' })).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, steps: 'x' })).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, endedAt: null })).toBeNull();
+	});
+
+	it('drops broken steps and metrics instead of failing', () => {
+		const finished = toSnapshot(run(SCRIPT).state);
+		const restored = fromSnapshot('A', 'm7', {
+			...finished,
+			steps: [...finished.steps, { id: 1 }, null],
+			metrics: { ...finished.metrics, bad: { label: 'Bad', value: {} } }
+		});
+		expect(restored?.steps).toEqual(finished.steps);
+		expect(restored?.metrics).toEqual(finished.metrics);
 	});
 });
