@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
 	createLiveSession,
 	failLiveSession,
+	fromSnapshot,
+	markLiveSessionStopped,
 	reduceLiveSession,
+	toSnapshot,
+	tokensPerSecond,
 	type LiveSessionState
 } from './reducer';
 import type { SSEMessage } from './sse';
@@ -226,5 +230,96 @@ describe('failLiveSession', () => {
 	it('returns a finished session unchanged', () => {
 		const finished: LiveSessionState = run(SCRIPT).state;
 		expect(failLiveSession(finished, 'Stopped')).toBe(finished);
+	});
+
+	it('does not mark the session as stopped', () => {
+		const running = run([step('draft', 'running')]).state;
+		expect(failLiveSession(running, 'Network down').stopped).toBe(false);
+	});
+});
+
+describe('markLiveSessionStopped', () => {
+	it('ends a running session as stopped and not retryable', () => {
+		const running = run([step('draft', 'running')]).state;
+		const stopped = markLiveSessionStopped(running, 50);
+		expect(stopped).toMatchObject({
+			status: 'error',
+			error: 'Stopped',
+			stopped: true,
+			retryable: false,
+			endedAt: 50
+		});
+		expect(stopped.steps[0].status).toBe('error');
+	});
+
+	it('returns a finished session unchanged', () => {
+		const finished: LiveSessionState = run(SCRIPT).state;
+		expect(markLiveSessionStopped(finished)).toBe(finished);
+	});
+});
+
+describe('tokensPerSecond', () => {
+	const withTokens = (value: number | string, startedAt: number, endedAt: number | null) => ({
+		...createLiveSession('A', 'm7', startedAt),
+		metrics: { tokens: { label: 'Tokens', value } },
+		endedAt
+	});
+
+	it('averages tokens over the whole session, rounded', () => {
+		expect(tokensPerSecond(withTokens(212, 0, 9300))).toBe(23);
+	});
+
+	it('uses now while the session is still running', () => {
+		expect(tokensPerSecond(withTokens(100, 0, null), 4000)).toBe(25);
+	});
+
+	it('is null without a numeric token count or in the first second', () => {
+		expect(tokensPerSecond(createLiveSession('A', 'm7', 0), 5000)).toBeNull();
+		expect(tokensPerSecond(withTokens('many', 0, 5000))).toBeNull();
+		expect(tokensPerSecond(withTokens(0, 0, 5000))).toBeNull();
+		expect(tokensPerSecond(withTokens(40, 0, 900))).toBeNull();
+	});
+});
+
+describe('snapshots', () => {
+	it('round-trips a finished session through JSON', () => {
+		const finished = run(SCRIPT).state;
+		const saved = JSON.parse(JSON.stringify(toSnapshot(finished)));
+		const restored = fromSnapshot('A', 'm7', saved);
+		expect(restored).toMatchObject({
+			chatId: 'A',
+			messageId: 'm7',
+			status: finished.status,
+			steps: finished.steps,
+			metrics: finished.metrics,
+			startedAt: finished.startedAt,
+			endedAt: finished.endedAt,
+			retryable: false
+		});
+	});
+
+	it('keeps the stopped flag', () => {
+		const stopped = markLiveSessionStopped(run([step('draft', 'running')]).state, 50);
+		expect(fromSnapshot('A', 'm7', toSnapshot(stopped))?.stopped).toBe(true);
+	});
+
+	it('ignores anything that is not a finished session', () => {
+		const finished = toSnapshot(run(SCRIPT).state);
+		expect(fromSnapshot('A', 'm7', null)).toBeNull();
+		expect(fromSnapshot('A', 'm7', 'oops')).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, status: 'streaming' })).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, steps: 'x' })).toBeNull();
+		expect(fromSnapshot('A', 'm7', { ...finished, endedAt: null })).toBeNull();
+	});
+
+	it('drops broken steps and metrics instead of failing', () => {
+		const finished = toSnapshot(run(SCRIPT).state);
+		const restored = fromSnapshot('A', 'm7', {
+			...finished,
+			steps: [...finished.steps, { id: 1 }, null],
+			metrics: { ...finished.metrics, bad: { label: 'Bad', value: {} } }
+		});
+		expect(restored?.steps).toEqual(finished.steps);
+		expect(restored?.metrics).toEqual(finished.metrics);
 	});
 });

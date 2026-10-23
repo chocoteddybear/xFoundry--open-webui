@@ -217,7 +217,12 @@ describe('stopLiveSession', () => {
 		await running;
 
 		expect(streams[0].aborted).toBe(true);
-		expect(session('A:m1')).toMatchObject({ status: 'error', error: 'Stopped', retryable: false });
+		expect(session('A:m1')).toMatchObject({
+			status: 'error',
+			error: 'Stopped',
+			retryable: false,
+			stopped: true
+		});
 		expect(session('A:m1').steps[0].status).toBe('error');
 		expect(isLiveSessionRunning('A', 'm1')).toBe(false);
 	});
@@ -246,7 +251,8 @@ describe('stopMessageLiveSessions', () => {
 		expect(session('local:abc:m1')).toMatchObject({
 			status: 'error',
 			error: 'Ollama: 500',
-			retryable: false
+			retryable: false,
+			stopped: false
 		});
 		expect(session('B:m2')).toMatchObject({ status: 'error', error: 'Ollama: 500' });
 		expect(streams.map((stream) => stream.aborted)).toEqual([true, true, false]);

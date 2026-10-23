@@ -2,9 +2,11 @@ import asyncio
 import json
 import logging
 
-from fastapi import APIRouter, Depends, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
+from open_webui.models.chats import Chats
 from open_webui.utils.auth import get_verified_user
+from pydantic import BaseModel
 
 log = logging.getLogger(__name__)
 
@@ -93,3 +95,31 @@ async def stream_live_session(
         # X-Accel-Buffering stops nginx-style proxies from holding the stream until it ends.
         headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'},
     )
+
+
+class SnapshotForm(BaseModel):
+    chat_id: str
+    message_id: str
+    snapshot: dict
+
+
+MAX_SNAPSHOT_BYTES = 20_000
+
+
+@router.post('/snapshot')
+async def save_live_session_snapshot(form_data: SnapshotForm, user=Depends(get_verified_user)):
+    if len(json.dumps(form_data.snapshot)) > MAX_SNAPSHOT_BYTES:
+        raise HTTPException(400, 'Snapshot is too large')
+
+    chat = await Chats.get_chat_by_id(form_data.chat_id)
+    if not chat or chat.user_id != user.id:
+        raise HTTPException(404, 'Chat not found')
+    if not await Chats.get_message_by_id_and_message_id(form_data.chat_id, form_data.message_id):
+        raise HTTPException(404, 'Message not found')
+
+    # Merged into the existing message, so the answer itself is left untouched; touch=False keeps
+    # the chat's position in the sidebar.
+    await Chats.upsert_message_to_chat_by_id_and_message_id(
+        form_data.chat_id, form_data.message_id, {'liveSession': form_data.snapshot}, touch=False
+    )
+    return True

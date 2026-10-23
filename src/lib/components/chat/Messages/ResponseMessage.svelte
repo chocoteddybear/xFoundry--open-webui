@@ -82,6 +82,7 @@
 		files?: { type: string; url: string }[];
 		timestamp: number;
 		role: string;
+		liveSession?: unknown;
 		statusHistory?: {
 			done: boolean;
 			action: string;
@@ -718,14 +719,6 @@
 							<StatusHistory statusHistory={message?.statusHistory} />
 						{/if}
 
-						<LiveSessionWidget
-							{chatId}
-							{messageId}
-							onRetry={isLiveSessionEnabled()
-								? () => startMessageLiveSession(chatId, messageId)
-								: null}
-						/>
-
 						{#if message?.files && message.files?.filter( (f) => ['image', 'file'].includes(f.type) ).length > 0}
 							<div
 								class="my-1 w-full flex overflow-x-auto gap-2 flex-wrap"
@@ -951,6 +944,13 @@
 						</div>
 					</div>
 				</div>
+
+				<LiveSessionWidget
+					{chatId}
+					{messageId}
+					snapshot={isLiveSessionEnabled() ? message?.liveSession : null}
+					onRetry={isLiveSessionEnabled() ? () => startMessageLiveSession(chatId, messageId) : null}
+				/>
 
 				{#if compactPreview && message.timestamp}
 					<div class="mt-0.5 flex justify-start whitespace-nowrap text-gray-600 dark:text-gray-500">
