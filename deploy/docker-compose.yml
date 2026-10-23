@@ -1,0 +1,45 @@
+# Private demo of the Live Session Widget on one small server.
+# The image is built by GitHub Actions (.github/workflows/demo-deploy.yml); this server only runs it.
+services:
+  open-webui:
+    image: ghcr.io/chocoteddybear/owui-demo:${IMAGE_TAG:-latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      ENABLE_LIVE_SESSION_MOCK: 'true'
+      ENABLE_OLLAMA_API: 'false'
+      # Only used on the very first start (empty database); later changes are made in the Admin Panel.
+      OPENAI_API_BASE_URL: http://fake-model:8099/v1
+      OPENAI_API_KEY: dev
+    volumes:
+      - open-webui:/app/backend/data
+    depends_on:
+      - fake-model
+
+  fake-model:
+    image: python:3.12-alpine
+    restart: unless-stopped
+    environment:
+      FAKE_MODEL_HOST: 0.0.0.0
+    command: ['python', '/app/fake_openai_server.py', '8099']
+    volumes:
+      - ./fake_openai_server.py:/app/fake_openai_server.py:ro
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      - '80:80'
+      - '443:443'
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - open-webui
+
+volumes:
+  open-webui:
+  caddy-data:
+  caddy-config:

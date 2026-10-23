@@ -8,6 +8,7 @@
 from __future__ import annotations
 
 import json
+import os
 import sys
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -103,5 +104,7 @@ class Handler(BaseHTTPRequestHandler):
 
 if __name__ == '__main__':
     port = int(sys.argv[1]) if len(sys.argv) > 1 else 8099
-    print(f'Fake OpenAI-compatible model "{MODEL}" on http://localhost:{port}/v1')
-    ThreadingHTTPServer(('127.0.0.1', port), Handler).serve_forever()
+    # Inside Docker the model must listen on all interfaces so the Open WebUI container can reach it.
+    host = os.environ.get('FAKE_MODEL_HOST', '127.0.0.1')
+    print(f'Fake OpenAI-compatible model "{MODEL}" on http://{host}:{port}/v1', flush=True)
+    ThreadingHTTPServer((host, port), Handler).serve_forever()

@@ -1,0 +1,9 @@
+# HTTPS certificate is issued automatically for SITE_ADDRESS (e.g. 165-245-163-103.sslip.io).
+{$SITE_ADDRESS} {
+	# Password prompt in front of everything, so the app is not visible to the public.
+	basic_auth {
+		{$BASIC_AUTH_USER} {$BASIC_AUTH_HASH}
+	}
+	# Plain reverse proxy: WebSockets and server-sent events pass through as they are.
+	reverse_proxy open-webui:8080
+}
